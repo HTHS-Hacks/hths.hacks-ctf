@@ -1,0 +1,10 @@
+{
+  "name": "Oh The Places It Can Be",
+  "category": "Easy",
+  "description": "Log into the shell and see if find the flag here: {{directory}}",
+  "score" : 10,
+  "hints": [],
+  "author": "Gustav hansen",
+  "organization": "hths.hacks()",
+  "event": "hths.hacks() CTF"
+}

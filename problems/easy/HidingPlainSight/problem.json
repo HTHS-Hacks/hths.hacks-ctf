@@ -1,0 +1,10 @@
+{
+  "name": "Hiding in Plain Sight?",
+  "category": "Easy",
+  "description": "See if you can find the flag from this binary. The file can be found at {{directory}} or can be downloaded here: {{url_for('vuln')}}",
+  "score" : 10,
+  "hints": [],
+  "author": "Gustav Hansen",
+  "event": "hths.hacks() CTF",
+  "organization": "hths.hacks()"
+}
