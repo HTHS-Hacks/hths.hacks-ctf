@@ -14,9 +14,10 @@ help () {
     echo "passwd:           The password for the ctf account. MAKE IT VERY SECURE!!! This is how you SSH in."
     echo "shell_ip:         The IP address of the shell server: For example: 206.189.200.174"
     echo "server:           What server this is being run on. Can either be web or shell"
+    echo "protocol:         Optional. Default is https. Can also be http."
 }
 
-if [ "$#" -lt 5 ]; then
+if [[ $# -lt 5 ]]; then
     echo "Illegal number of parameters"
     help
     exit 1
@@ -32,9 +33,10 @@ SHELL_URL=$2
 PASSWD=$3
 SHELL_IP=$4
 SERVER=$5
+PROTOCOL=${6:-https}
 
-apt update
-apt install git
+apt-get update
+apt-get install git sudo -y
 
 useradd -ms /bin/bash ctf
 echo 'ctf ALL=(ALL:ALL) NOPASSWD: ALL' | sudo EDITOR='tee -a' visudo
@@ -77,7 +79,7 @@ index 31ee2c94..bd096641 100644
 -web_address: "http://{{ lookup('env','WIP') or '192.168.2.2' }}"
 -nginx_server_name: "_"
 +web_fqdn: "$WEB_URL"
-+web_address: "https://$WEB_URL"
++web_address: "$PROTOCOL://$WEB_URL"
 +nginx_server_name: "{{ web_fqdn }}"
  flask_app_server_name: "{{ web_fqdn }}"
  web_address_internal: "{{ web_address }}"
@@ -138,7 +140,7 @@ index 65c9e5fd..9a0424e2 100644
 -    "competition_url": "http://192.168.2.2",
 -    "admin_email": "email@example.com",  # Contact given to parents
 +    "competition_name": "hths.hacks() CTF",
-+    "competition_url": "https://$WEB_URL",
++    "competition_url": "$PROTOCOL://$WEB_URL",
 +    "admin_email": "contact@hthshacks.com",  # Contact given to parents
      # EMAIL WHITELIST
      "email_filter": [],
@@ -344,7 +346,7 @@ index 31ee2c94..91d94289 100644
 -web_address: "http://{{ lookup('env','WIP') or '192.168.2.2' }}"
 -nginx_server_name: "_"
 +web_fqdn: "$WEB_URL"
-+web_address: "https://$WEB_URL"
++web_address: "$PROTOCOL://$WEB_URL"
 +nginx_server_name: "{{ web_fqdn }}"
  flask_app_server_name: "{{ web_fqdn }}"
  web_address_internal: "{{ web_address }}"
@@ -396,7 +398,7 @@ index 304bd8c5..35533d73 100644
 -dev_web     ansible_connection=local    hostname=pico-local-dev-web-db
 +dev_web     ansible_connection=local    hostname=ctf-web ansible_host=$WEB_URL shell_ip=$SHELL_IP
 diff --git a/picoCTF-shell/hacksport/problem.py b/picoCTF-shell/hacksport/problem.py
-index e1c09d10..6df6ae9d 100644
+index e1c09d10..517bb636 100644
 --- a/picoCTF-shell/hacksport/problem.py
 +++ b/picoCTF-shell/hacksport/problem.py
 @@ -14,11 +14,11 @@ from shell_manager.util import EXTRA_ROOT
@@ -412,6 +414,17 @@ index e1c09d10..6df6ae9d 100644
 +"%s"
  """
 
+
+@@ -347,6 +347,6 @@ class PHPApp(WebService):
+         """
+
+         web_root = join(self.directory, self.php_root)
+-        self.start_cmd = "uwsgi --protocol=http --plugin php -p {1} --force-cwd {0} --php-allowed-docroot {2} --http-socket-modifier1 14 --php-index index.html --php-index index.php --check-static {0} --static-skip-ext php --logto /dev/null".format(
++        self.start_cmd = "uwsgi --protocol=http --plugin php -p {1} --force-cwd '{0}' --php-allowed-docroot '{2}' --http-socket-modifier1 14 --php-index index.html --php-index index.php --check-static '{0}' --static-skip-ext php --logto /dev/null".format(
+             web_root, self.num_workers, self.directory
+         )
+ """
+
 EOF
 
 if [[ "$SERVER" == "web" ]]
@@ -420,17 +433,17 @@ then
     git apply ../web.patch
 
     cd /home/ctf/picoCTF/ansible
-    echo "$PASSWD" | ansible-playbook --ask-sudo-pass -e "web_address=https://$WEB_URL web_address_internal=https://$WEB_URL shell_hostname=$SHELL_URL shell_host=$SHELL_URL shell_port=22" -i inventories/local_development -v -l web,db site.yml
+    ansible-playbook --ask-sudo-pass -e "web_address=$PROTOCOL://$WEB_URL web_address_internal=$PROTOCOL://$WEB_URL shell_hostname=$SHELL_URL shell_host=$SHELL_URL shell_port=22" -i inventories/local_development --extra-vars "ansible_sudo_pass=$(PASSWD)" -v -l web,db site.yml
 elif [[ "$SERVER" == "shell" ]]
 then
     cd /home/ctf/picoCTF
     git apply ../shell.patch
 
     cd /home/ctf/picoCTF/ansible
-    echo "$PASSWD" | ansible-playbook --ask-sudo-pass -e "web_address=https://$WEB_URL web_address_internal=https://$WEB_URL shell_hostname=$SHELL_URL shell_host=$SHELL_URL shell_port=22" -i inventories/local_development -v -l shell site.yml
+    ansible-playbook --ask-sudo-pass -e "web_address=$PROTOCOL://$WEB_URL web_address_internal=$PROTOCOL://$WEB_URL shell_hostname=$SHELL_URL shell_host=$SHELL_URL shell_port=22" -i inventories/local_development --extra-vars "ansible_sudo_pass=$(PASSWD)" -v -l shell site.yml
     sudo pip3 install -e /home/ctf/picoCTF/picoCTF-shell
     sudo shell_manager config local set -f hostname -v "$SHELL_URL"
-    sudo shell_manager config local set -f web_server -v "https://$WEB_URL"
+    sudo shell_manager config local set -f web_server -v "$PROTOCOL://$WEB_URL"
     sudo shell_manager config local set -f rate_limit_bypass_key -v "$PASSWD"
     sudo shell_manager config shared set -f deploy_secret -v "$PASSWD"
     mkdir /home/ctf/problems
@@ -456,7 +469,10 @@ then
     DOMAINS="$SHELL_URL"
 fi
 
-certbot --nginx --non-interactive --agree-tos --domains $DOMAINS --redirect --no-eff-email --email contact@hthshacks.com
+if [[ $PROTOCOL == "https" ]]
+then
+    certbot --nginx --non-interactive --agree-tos --domains $DOMAINS --redirect --no-eff-email --email contact@hthshacks.com
+fi
 
 echo
 echo

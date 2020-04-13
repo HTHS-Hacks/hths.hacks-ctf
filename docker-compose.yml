@@ -1,0 +1,48 @@
+version: '3'
+services:
+    shell:
+        container_name: ctf_shell
+        hostname: ctf-shell
+        privileged: true
+        tty: true
+        command:
+            - 192.168.11.2
+            - 192.168.11.3
+            - password
+            - 192.168.11.3
+            - shell
+            - http
+        build:
+            context: .
+            dockerfile: Dockerfile
+        networks:
+            app_net:
+                ipv4_address: 192.168.11.3
+    web:
+        container_name: ctf_web
+        hostname: ctf-web
+        privileged: true
+        tty: true
+        command:
+            - 192.168.11.2
+            - 192.168.11.3
+            - password
+            - 192.168.11.3
+            - web
+            - http
+        build:
+            context: .
+            dockerfile: Dockerfile
+        networks:
+            app_net:
+                ipv4_address: 192.168.11.2
+networks:
+    app_net:
+        driver: bridge
+        driver_opts:
+            com.docker.network.enable_ipv6: "false"
+        ipam:
+            driver: default
+            config:
+                - subnet: 192.168.11.0/24
+
